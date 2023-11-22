@@ -41,7 +41,8 @@ import static io.aeron.CncFileDescriptor.*;
 import static io.aeron.driver.status.PublisherLimit.PUBLISHER_LIMIT_TYPE_ID;
 import static io.aeron.driver.status.SystemCounterDescriptor.SYSTEM_COUNTER_TYPE_ID;
 import static io.aeron.driver.status.SubscriberPos.SUBSCRIBER_POSITION_TYPE_ID;
-import static io.aeron.driver.status.ClientHeartbeatStatus.CLIENT_HEARTBEAT_TYPE_ID;
+import static io.aeron.status.HeartbeatTimestamp.HEARTBEAT_TYPE_ID;
+//import static io.aeron.driver.status.ClientHeartbeatStatus.CLIENT_HEARTBEAT_TYPE_ID;
 
 public class PrometheusAeronStat {
 
@@ -86,6 +87,11 @@ public class PrometheusAeronStat {
         if (CNC_VERSION != cncVersion) {
             throw new IllegalStateException(
                     "Aeron CnC version does not match: version=" + cncVersion + " required=" + CNC_VERSION);
+        }
+        else {
+            System.out.println("\nCNC_VERSION is EQUAL to cncVersion");
+            System.out.println("\nCNC_VERSION ==>" + CNC_VERSION );
+            System.out.println("\ncncVersion ==>" + cncVersion );
         }
 
         return new CountersReader(
@@ -132,8 +138,12 @@ public class PrometheusAeronStat {
             }
         } else {
 
+
+             //printing the AeronArchive to con
+
             final AeronArchive.Context archiveCtx = new AeronArchive.Context()
-                    .controlResponseStreamId(AeronArchive.Configuration.controlResponseStreamId() + 1);
+                    .controlResponseStreamId(AeronArchive.Configuration.controlResponseStreamId() + 1)
+                    .controlRequestChannel(AeronArchive.Configuration.controlChannel());
             try (AeronArchive archive = AeronArchive.connect(archiveCtx)) {
                 while (running.get()) {
                     prometheusAeronStat.updatePrometheus();
@@ -163,7 +173,7 @@ public class PrometheusAeronStat {
                         case SUBSCRIBER_POSITION_TYPE_ID:
                             this.numSubscriberCounter++;
                             break;
-                        case CLIENT_HEARTBEAT_TYPE_ID:
+                        case HEARTBEAT_TYPE_ID: //its value is 11
                             this.numClientCounter++;
                             break;
                         default:
@@ -211,7 +221,23 @@ public class PrometheusAeronStat {
 
 
     public void updateSystemCounter(CountersReader cr, int counterId, int typeId, String label) {
-        String smallLabel = label.replaceAll(" ", "_").toLowerCase();
+        String smallLabel = label.replaceAll(" ", "_").toLowerCase().replace("," ,"_").replace("." ,"_").replace("-" ,"_").replace(":" ,"_").replace("=" ,"_");
+        /*
+
+
+                Exception in thread "main" java.lang.IllegalArgumentException: Invalid
+                metric name: sender_flow_control_limits,_i.e._back-pressure_events
+                at io.prometheus.client.Collector.checkMetricName(Collector.java:182)
+                at io.prometheus.client.SimpleCollector.<init>(SimpleCollector.java:164)
+		
+		the comma in the name above is breaking io.prometheus.client.Collector's
+	       	sanity checking so for now just replacing with _
+	       
+	
+		doing the same with : = and - as well 
+         */
+
+
         Counter prometheusCounter;
         if (prometheusCounterMap.get(smallLabel) == null) {
             prometheusCounter = Counter.build().name(smallLabel).help(Integer.toString(typeId)).register();
